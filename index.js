@@ -127,7 +127,7 @@ function stopBot() {
 
 async function handleBotCommands(message) {
     const args = message.split(' ');
-    const command = args[0]; // Fixed command extraction string parser
+    const command = args[0]; // Fixed: Changed from args to args[0]
     if (!bot && ['stop', 'status'].includes(command) === false) return;
 
     switch (command) {
@@ -157,7 +157,7 @@ async function handleBotCommands(message) {
             bot.pathfinder.setGoal(new goals.GoalFollow(p.entity, 1), true);
             break;
         case 'mine':
-            const bName = args[1]; // Corrected argument indexing
+            const bName = args[1]; // Fixed: Changed from args to args[1]
             if (!bName) return bot.chat("Specify a block!");
             const bType = bot.registry.blocksByName[bName];
             if (!bType) return bot.chat("Unknown block.");
