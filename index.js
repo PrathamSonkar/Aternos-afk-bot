@@ -2079,3 +2079,34 @@ addLog(
 addLog("=".repeat(50));
 
 createBot();
+bot.on('chat', (username, message) => {
+
+  if (username === bot.username) return
+
+  if (message === '!follow') {
+
+    const target = bot.players[username]?.entity
+
+    if (!target) {
+      bot.chat("I can't see you.")
+      return
+    }
+
+    const mcData = require('minecraft-data')(bot.version)
+    const movements = new Movements(bot, mcData)
+
+    bot.pathfinder.setMovements(movements)
+
+    bot.pathfinder.setGoal(
+      new goals.GoalFollow(target, 1),
+      true
+    )
+
+    bot.chat('Following you.')
+  }
+
+  if (message === '!stop') {
+    bot.pathfinder.setGoal(null)
+    bot.chat('Stopped following.')
+  }
+})
