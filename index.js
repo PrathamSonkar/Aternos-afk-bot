@@ -1,12 +1,13 @@
 const mineflayer = require('mineflayer');
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
+const { createClient } = require('redis');
 
 // CONFIGURATION: Set to your exact username
 const OWNER_NAME = 'NinjaWarrior'; 
 
 const botOptions = {
     host: 'SurvivalSeries125.aternos.me', 
-    port: process.env.PORT ? parseInt(process.env.PORT) : 24606, // Railway port fix       
+    port: process.env.PORT ? parseInt(process.env.PORT) : 24606, // Dynamic Railway routing       
     username: 'CommanderBot',
     version: false     
 };
@@ -14,15 +15,33 @@ const botOptions = {
 let bot;
 let afkInterval = null;
 let holdInterval = null;
+let db = null;
 
-// Object to store your saved position coordinates temporarily in memory
-let savedPosition = null; 
+// ==========================================
+// 1. CONNECT TO RAILWAY DATABASE (REDIS)
+// ==========================================
+async function startDatabase() {
+    if (process.env.REDIS_URL) {
+        try {
+            db = createClient({ url: process.env.REDIS_URL });
+            db.on('error', (err) => console.log('[Database Error]', err.message));
+            await db.connect();
+            console.log('[Database] Connected to Railway Redis successfully!');
+        } catch (err) {
+            console.log('[Database] Connection failed, using fallback memory:', err.message);
+            db = null;
+        }
+    } else {
+        console.log('[Database] No REDIS_URL found. Please add the Redis plugin in Railway.');
+    }
+}
 
+// ==========================================
+// 2. MINECRAFT BOT LIFE CYCLE & LOGIC
+// ==========================================
 function createBotInstance() {
     console.log('[System] Connecting to SurvivalSeries125.aternos.me...');
     bot = mineflayer.createBot(botOptions);
-
-    // Load Pathfinder Plugin
     bot.loadPlugin(pathfinder);
 
     bot.once('spawn', () => {
@@ -40,24 +59,38 @@ function createBotInstance() {
 
         switch (command) {
             case 'setpos':
-                // Saves the bot's exact current location coordinates
                 const currentPos = bot.entity.position;
-                savedPosition = {
+                const posData = {
                     x: Math.floor(currentPos.x),
                     y: Math.floor(currentPos.y),
                     z: Math.floor(currentPos.z)
                 };
-                bot.chat(`Position saved successfully at X: ${savedPosition.x}, Y: ${savedPosition.y}, Z: ${savedPosition.z}`);
+                
+                if (db) {
+                    // Saves coordinates directly to your permanent Railway Redis container
+                    await db.set('saved_bot_position', JSON.stringify(posData));
+                    bot.chat(`Saved PERMANENTLY to database at X: ${posData.x}, Y: ${posData.y}, Z: ${posData.z}`);
+                } else {
+                    bot.chat("Database not linked. Saved temporarily in short-term instance memory.");
+                    global.tempPos = posData;
+                }
                 break;
 
             case 'gopos':
-                // Commands the bot to pathfind back to the saved coordinates
-                if (!savedPosition) {
-                    bot.chat("No position has been saved yet! Type 'setpos' first.");
+                let targetPos = null;
+                if (db) {
+                    const stored = await db.get('saved_bot_position');
+                    if (stored) targetPos = JSON.parse(stored);
+                } else {
+                    targetPos = global.tempPos;
+                }
+
+                if (!targetPos) {
+                    bot.chat("No position found! Stand somewhere and type 'setpos' first.");
                     return;
                 }
-                bot.chat(`Moving back to saved position at X: ${savedPosition.x}, Y: ${savedPosition.y}, Z: ${savedPosition.z}...`);
-                bot.pathfinder.setGoal(new goals.GoalBlock(savedPosition.x, savedPosition.y, savedPosition.z), false);
+                bot.chat(`Walking back to coordinates: X: ${targetPos.x}, Y: ${targetPos.y}, Z: ${targetPos.z}...`);
+                bot.pathfinder.setGoal(new goals.GoalBlock(targetPos.x, targetPos.y, targetPos.z), false);
                 break;
 
             case 'come':
@@ -73,57 +106,45 @@ function createBotInstance() {
             case 'mine':
                 const blockName = args[1];
                 if (!blockName) {
-                    bot.chat("Please specify a block. Example: mine iron_ore");
+                    bot.chat("Specify a block. Example: mine iron_ore");
                     return;
                 }
-
-                const registry = bot.registry;
-                const blockType = registry.blocksByName[blockName];
+                const blockType = bot.registry.blocksByName[blockName];
                 if (!blockType) {
-                    bot.chat(`I don't know what ${blockName} is.`);
+                    bot.chat(`Unknown block type: ${blockName}`);
                     return;
                 }
-
-                const block = bot.findBlock({
-                    matching: blockType.id,
-                    maxDistance: 32
-                });
-
+                const block = bot.findBlock({ matching: blockType.id, maxDistance: 32 });
                 if (!block) {
-                    bot.chat(`Could not find any ${blockName} nearby.`);
+                    bot.chat(`No ${blockName} found nearby.`);
                     return;
                 }
-
                 bot.chat(`Moving to mine ${blockName}...`);
-                
                 try {
                     await bot.pathfinder.goto(new goals.GoalLookAtBlock(block.position, bot.world));
                     bot.chat("Mining now!");
                     await bot.dig(block);
                     bot.chat("Block broken!");
                 } catch (err) {
-                    bot.chat(`Cannot mine block: ${err.message}`);
+                    bot.chat(`Mining error: ${err.message}`);
                 }
                 break;
 
             case 'bed':
-                bot.chat("Searching for a nearby bed...");
                 const bedBlock = bot.findBlock({
-                    matching: (block) => block.name.includes('bed'),
+                    matching: (b) => b.name.includes('bed'),
                     maxDistance: 5
                 });
-
                 if (!bedBlock) {
-                    bot.chat("No bed found within 5 blocks of me!");
+                    bot.chat("No bed found within 5 blocks.");
                     return;
                 }
-
                 try {
                     await bot.lookAt(bedBlock.position.offset(0.5, 0.5, 0.5));
                     await bot.activateBlock(bedBlock);
-                    bot.chat("I right-clicked the bed to set spawn/sleep!");
+                    bot.chat("Clicked the bed successfully!");
                 } catch (err) {
-                    bot.chat(`Can't use bed right now: ${err.message}`);
+                    bot.chat(`Can't use bed: ${err.message}`);
                 }
                 break;
 
@@ -134,34 +155,21 @@ function createBotInstance() {
                     bot.deactivateItem();
                     bot.chat("Right-click hold toggle is now OFF.");
                 } else {
-                    bot.chat("Right-click hold toggle is now ON. Holding use item...");
-                    holdInterval = setInterval(() => {
-                        bot.activateItem(); 
-                    }, 200);
+                    bot.chat("Right-click hold toggle is now ON.");
+                    holdInterval = setInterval(() => { bot.activateItem(); }, 200);
                 }
                 break;
 
             case 'stop':
                 bot.chat("Stopping all actions.");
                 bot.pathfinder.setGoal(null);
-                
-                if (afkInterval) {
-                    clearInterval(afkInterval);
-                    afkInterval = null;
-                }
-                if (holdInterval) {
-                    clearInterval(holdInterval);
-                    holdInterval = null;
-                    bot.deactivateItem();
-                }
+                if (afkInterval) { clearInterval(afkInterval); afkInterval = null; }
+                if (holdInterval) { clearInterval(holdInterval); holdInterval = null; bot.deactivateItem(); }
                 bot.clearControlStates();
                 break;
 
             case 'afk':
-                if (afkInterval) {
-                    bot.chat("I am already in AFK mode.");
-                    return;
-                }
+                if (afkInterval) { bot.chat("Already in AFK mode."); return; }
                 bot.chat("Starting anti-AFK spin loop.");
                 afkInterval = setInterval(() => {
                     bot.setControlState('jump', true);
@@ -175,57 +183,46 @@ function createBotInstance() {
                 break;
 
             case 'drop':
-                bot.chat("Dropping my inventory!");
-                const items = bot.inventory.items();
-                for (const item of item) {
-                    try {
-                        await bot.dropItem(item);
+                bot.chat("Dropping inventory!");
+                // FIXED TYPO HERE (Changed from 'for...of item' to avoid loop crashes)
+                for (const item of bot.inventory.items()) {
+                    try { 
+                        await bot.dropItem(item); 
                     } catch (err) {}
                 }
                 break;
         }
     });
 
-    // Auto-Reconnect System
-    bot.on('kick', (reason) => {
-        console.log(`[Disconnect] Kicked: ${reason}. Reconnecting in 15s...`);
-        cleanUpAndRestart();
-    });
-
-    bot.on('error', (err) => {
-        console.log(`[Error] Connection error: ${err.message}. Reconnecting in 15s...`);
-        cleanUpAndRestart();
-    });
-
-    bot.on('end', () => {
-        console.log('[Disconnect] Lost connection. Reconnecting in 15s...');
-        cleanUpAndRestart();
-    });
+    // Auto-Reconnect Framework
+    bot.on('kick', (reason) => { console.log(`[Kick] ${reason}. Retrying in 15s...`); cleanUpAndRestart(); });
+    bot.on('error', (err) => { console.log(`[Error] ${err.message}. Retrying in 15s...`); cleanUpAndRestart(); });
+    bot.on('end', () => { console.log('[Disconnect] Connection lost. Retrying in 15s...'); cleanUpAndRestart(); });
 }
 
 function cleanUpAndRestart() {
-    if (afkInterval) {
-        clearInterval(afkInterval);
-        afkInterval = null;
-    }
-    if (holdInterval) {
-        clearInterval(holdInterval);
-        holdInterval = null;
-    }
+    if (afkInterval) { clearInterval(afkInterval); afkInterval = null; }
+    if (holdInterval) { clearInterval(holdInterval); holdInterval = null; }
     bot.removeAllListeners();
     setTimeout(createBotInstance, 15000);
 }
 
-// Start the Bot
-createBotInstance();
+// Initial Boot Orchestrator
+async function boot() {
+    await startDatabase();
+    createBotInstance();
+}
+boot();
 
-// RAILWAY ALIVE LOOP
+// ==========================================
+// 3. RAILWAY ALIVE PORT BIND ENGINE
+// ==========================================
 const http = require('http');
 const webServer = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('Bot environment is healthy\n');
+    res.end('Minecraft bot environment is healthy and operational.\n');
 });
-const webPort = process.env.PORT || 3000;
-webServer.listen(webPort, () => {
-    console.log(`[Railway] Internal web listener attached to port ${webPort}`);
+// Satisfies Railway web checks to guarantee continuous uptime
+webServer.listen(process.env.PORT || 3000, () => {
+    console.log(`[Railway] Internal web port bound to ${process.env.PORT || 3000}`);
 });
