@@ -1,9 +1,8 @@
 const mineflayer = require('mineflayer');
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
-const autoeat = require('mineflayer-auto-eat').plugin; 
 
 // CONFIGURATION: Change to your exact in-game name
-const OWNER_NAME = 'NinjaWarrior10998'; 
+const OWNER_NAME = 'YourMinecraftName'; 
 
 const botOptions = {
     host: 'SurvivalSeries125.aternos.me', 
@@ -19,19 +18,13 @@ function createBotInstance() {
     console.log('[System] Connecting to SurvivalSeries125.aternos.me:24606...');
     bot = mineflayer.createBot(botOptions);
 
-    // Load Plugins
+    // Load Pathfinder Plugin
     bot.loadPlugin(pathfinder);
-    bot.loadPlugin(autoeat); 
 
     bot.once('spawn', () => {
         console.log(`[Bot] Successfully joined. Listening for commands from: ${OWNER_NAME}`);
         const defaultMovements = new Movements(bot);
         bot.pathfinder.setMovements(defaultMovements);
-        
-        // Auto-Eat configuration
-        bot.autoEat.options.priority = 'foodPoints';
-        bot.autoEat.options.startAt = 14; 
-        bot.autoEat.options.bannedFood = ['rotten_flesh', 'pufferfish', 'poisonous_potato'];
     });
 
     // COMMAND ENGINE
@@ -138,19 +131,19 @@ function createBotInstance() {
         }
     });
 
-    // Auto-Reconnect System (Handles kicks & server offline status)
+    // Auto-Reconnect System
     bot.on('kick', (reason) => {
-        console.log(`[Disconnect] Kicked from server: ${reason}. Reconnecting in 15 seconds...`);
+        console.log(`[Disconnect] Kicked: ${reason}. Reconnecting in 15s...`);
         cleanUpAndRestart();
     });
 
     bot.on('error', (err) => {
-        console.log(`[Error] Connection error: ${err.message}. Reconnecting in 15 seconds...`);
+        console.log(`[Error] Connection error: ${err.message}. Reconnecting in 15s...`);
         cleanUpAndRestart();
     });
 
     bot.on('end', () => {
-        console.log('[Disconnect] Connection lost. Reconnecting in 15 seconds...');
+        console.log('[Disconnect] Lost connection. Reconnecting in 15s...');
         cleanUpAndRestart();
     });
 }
@@ -160,10 +153,8 @@ function cleanUpAndRestart() {
         clearInterval(afkInterval);
         afkInterval = null;
     }
-    // Remove listeners to avoid memory leaks
     bot.removeAllListeners();
     setTimeout(createBotInstance, 15000);
 }
 
-// Boot the application
 createBotInstance();
