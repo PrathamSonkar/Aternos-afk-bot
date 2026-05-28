@@ -13,7 +13,10 @@ const botOptions = {
 
 let bot;
 let afkInterval = null;
-let holdInterval = null; // Tracks the right-click hold toggle status
+let holdInterval = null;
+
+// Object to store your saved position coordinates temporarily in memory
+let savedPosition = null; 
 
 function createBotInstance() {
     console.log('[System] Connecting to SurvivalSeries125.aternos.me...');
@@ -36,6 +39,27 @@ function createBotInstance() {
         const command = args[0];
 
         switch (command) {
+            case 'setpos':
+                // Saves the bot's exact current location coordinates
+                const currentPos = bot.entity.position;
+                savedPosition = {
+                    x: Math.floor(currentPos.x),
+                    y: Math.floor(currentPos.y),
+                    z: Math.floor(currentPos.z)
+                };
+                bot.chat(`Position saved successfully at X: ${savedPosition.x}, Y: ${savedPosition.y}, Z: ${savedPosition.z}`);
+                break;
+
+            case 'gopos':
+                // Commands the bot to pathfind back to the saved coordinates
+                if (!savedPosition) {
+                    bot.chat("No position has been saved yet! Type 'setpos' first.");
+                    return;
+                }
+                bot.chat(`Moving back to saved position at X: ${savedPosition.x}, Y: ${savedPosition.y}, Z: ${savedPosition.z}...`);
+                bot.pathfinder.setGoal(new goals.GoalBlock(savedPosition.x, savedPosition.y, savedPosition.z), false);
+                break;
+
             case 'come':
                 const player = bot.players[OWNER_NAME];
                 if (!player || !player.entity) {
@@ -95,7 +119,6 @@ function createBotInstance() {
                 }
 
                 try {
-                    // Turn to face the bed and click it
                     await bot.lookAt(bedBlock.position.offset(0.5, 0.5, 0.5));
                     await bot.activateBlock(bedBlock);
                     bot.chat("I right-clicked the bed to set spawn/sleep!");
@@ -106,16 +129,13 @@ function createBotInstance() {
 
             case 'hold':
                 if (holdInterval) {
-                    // Turn it OFF
                     clearInterval(holdInterval);
                     holdInterval = null;
-                    bot.deactivateItem(); // Stops holding/using item
+                    bot.deactivateItem();
                     bot.chat("Right-click hold toggle is now OFF.");
                 } else {
-                    // Turn it ON
                     bot.chat("Right-click hold toggle is now ON. Holding use item...");
                     holdInterval = setInterval(() => {
-                        // Continuously simulates holding down the right-click key
                         bot.activateItem(); 
                     }, 200);
                 }
@@ -125,12 +145,10 @@ function createBotInstance() {
                 bot.chat("Stopping all actions.");
                 bot.pathfinder.setGoal(null);
                 
-                // Clear AFK loop
                 if (afkInterval) {
                     clearInterval(afkInterval);
                     afkInterval = null;
                 }
-                // Clear Right-Click loop
                 if (holdInterval) {
                     clearInterval(holdInterval);
                     holdInterval = null;
@@ -159,7 +177,7 @@ function createBotInstance() {
             case 'drop':
                 bot.chat("Dropping my inventory!");
                 const items = bot.inventory.items();
-                for (const item of items) {
+                for (const item of item) {
                     try {
                         await bot.dropItem(item);
                     } catch (err) {}
