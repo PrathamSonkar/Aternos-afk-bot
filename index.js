@@ -2008,8 +2008,7 @@ process.on("uncaughtException", (err) => {
 
   // FIX: reset isReconnecting if it was stuck, then schedule reconnect
   if (isReconnecting) {
-    addLog(
-      "[FATAL] isReconnecting was stuck - resetting before crash recovery",
+    addLog("[FATAL] isReconnecting was stuck - resetting before crash recovery");
     );
     isReconnecting = false;
     // BUG FIX: was referencing non-existent 'reconnectTimeout' — correct name is 'reconnectTimeoutId'
