@@ -2,6 +2,7 @@
 
 const { addLog, getLogs } = require("./logger");
 const mineflayer = require("mineflayer");
+const { pathfinder, Movements, goals } = require('mineflayer-pathfinder')
 const { Movements, pathfinder, goals } = require("mineflayer-pathfinder");
 const { GoalBlock } = goals;
 const config = require("./settings.json");
