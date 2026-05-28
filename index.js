@@ -1,21 +1,22 @@
 const mineflayer = require('mineflayer');
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
 
-// CONFIGURATION: Change to your exact in-game name
+// CONFIGURATION: Set to your exact username
 const OWNER_NAME = 'NinjaWarrior'; 
 
 const botOptions = {
     host: 'SurvivalSeries125.aternos.me', 
-    port: 24606,       
+    port: process.env.PORT ? parseInt(process.env.PORT) : 24606, // Railway port fix       
     username: 'CommanderBot',
     version: false     
 };
 
 let bot;
 let afkInterval = null;
+let holdInterval = null; // Tracks the right-click hold toggle status
 
 function createBotInstance() {
-    console.log('[System] Connecting to SurvivalSeries125.aternos.me:24606...');
+    console.log('[System] Connecting to SurvivalSeries125.aternos.me...');
     bot = mineflayer.createBot(botOptions);
 
     // Load Pathfinder Plugin
@@ -81,12 +82,59 @@ function createBotInstance() {
                 }
                 break;
 
+            case 'bed':
+                bot.chat("Searching for a nearby bed...");
+                const bedBlock = bot.findBlock({
+                    matching: (block) => block.name.includes('bed'),
+                    maxDistance: 5
+                });
+
+                if (!bedBlock) {
+                    bot.chat("No bed found within 5 blocks of me!");
+                    return;
+                }
+
+                try {
+                    // Turn to face the bed and click it
+                    await bot.lookAt(bedBlock.position.offset(0.5, 0.5, 0.5));
+                    await bot.activateBlock(bedBlock);
+                    bot.chat("I right-clicked the bed to set spawn/sleep!");
+                } catch (err) {
+                    bot.chat(`Can't use bed right now: ${err.message}`);
+                }
+                break;
+
+            case 'hold':
+                if (holdInterval) {
+                    // Turn it OFF
+                    clearInterval(holdInterval);
+                    holdInterval = null;
+                    bot.deactivateItem(); // Stops holding/using item
+                    bot.chat("Right-click hold toggle is now OFF.");
+                } else {
+                    // Turn it ON
+                    bot.chat("Right-click hold toggle is now ON. Holding use item...");
+                    holdInterval = setInterval(() => {
+                        // Continuously simulates holding down the right-click key
+                        bot.activateItem(); 
+                    }, 200);
+                }
+                break;
+
             case 'stop':
                 bot.chat("Stopping all actions.");
                 bot.pathfinder.setGoal(null);
+                
+                // Clear AFK loop
                 if (afkInterval) {
                     clearInterval(afkInterval);
                     afkInterval = null;
+                }
+                // Clear Right-Click loop
+                if (holdInterval) {
+                    clearInterval(holdInterval);
+                    holdInterval = null;
+                    bot.deactivateItem();
                 }
                 bot.clearControlStates();
                 break;
@@ -120,17 +168,6 @@ function createBotInstance() {
         }
     });
 
-    // Auto-Defend System
-    bot.on('physicTick', () => {
-        if (!bot.entity) return;
-        const mobFilter = (entity) => entity.type === 'mob' && entity.position.distanceTo(bot.entity.position) < 4;
-        const enemy = bot.nearestEntity(mobFilter);
-        if (enemy) {
-            bot.lookAt(enemy.position.offset(0, enemy.height, 0));
-            bot.attack(enemy);
-        }
-    });
-
     // Auto-Reconnect System
     bot.on('kick', (reason) => {
         console.log(`[Disconnect] Kicked: ${reason}. Reconnecting in 15s...`);
@@ -153,8 +190,24 @@ function cleanUpAndRestart() {
         clearInterval(afkInterval);
         afkInterval = null;
     }
+    if (holdInterval) {
+        clearInterval(holdInterval);
+        holdInterval = null;
+    }
     bot.removeAllListeners();
     setTimeout(createBotInstance, 15000);
 }
 
+// Start the Bot
 createBotInstance();
+
+// RAILWAY ALIVE LOOP
+const http = require('http');
+const webServer = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Bot environment is healthy\n');
+});
+const webPort = process.env.PORT || 3000;
+webServer.listen(webPort, () => {
+    console.log(`[Railway] Internal web listener attached to port ${webPort}`);
+});
