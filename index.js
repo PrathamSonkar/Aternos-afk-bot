@@ -5,9 +5,10 @@ const { createClient } = require('redis');
 // CONFIGURATION: Set to your exact username
 const OWNER_NAME = 'NinjaWarrior'; 
 
+// FIXED MINECRAFT CONNECTION PARAMETERS
 const botOptions = {
     host: 'SurvivalSeries125.aternos.me', 
-    port: process.env.PORT ? parseInt(process.env.PORT) : 24606, // Dynamic Railway routing       
+    port: 24606, 
     username: 'CommanderBot',
     version: false     
 };
@@ -40,7 +41,7 @@ async function startDatabase() {
 // 2. MINECRAFT BOT LIFE CYCLE & LOGIC
 // ==========================================
 function createBotInstance() {
-    console.log('[System] Connecting to SurvivalSeries125.aternos.me...');
+    console.log('[System] Connecting to SurvivalSeries125.aternos.me:24606...');
     bot = mineflayer.createBot(botOptions);
     bot.loadPlugin(pathfinder);
 
@@ -67,7 +68,6 @@ function createBotInstance() {
                 };
                 
                 if (db) {
-                    // Saves coordinates directly to your permanent Railway Redis container
                     await db.set('saved_bot_position', JSON.stringify(posData));
                     bot.chat(`Saved PERMANENTLY to database at X: ${posData.x}, Y: ${posData.y}, Z: ${posData.z}`);
                 } else {
