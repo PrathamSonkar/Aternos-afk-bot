@@ -1213,7 +1213,8 @@ function createBot() {
       config.server.version && config.server.version.trim() !== ""
         ? config.server.version
         : false;
-    bot = mineflayer.createBot({
+    bot = mineflayer.createBot({ 
+      bot.loadPlugin(pathfinder)
       username: config["bot-account"].username,
       password: config["bot-account"].password || undefined,
       auth: config["bot-account"].type,
