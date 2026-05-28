@@ -17,7 +17,7 @@ let bot = null;
 let afkInterval = null;
 let holdInterval = null;
 let db = null;
-let panelLogs = []; // Stores the latest 20 log lines for your web page interface
+let panelLogs = []; 
 
 // Unified system logger for both Railway terminal and your web panel
 function logger(msg) {
@@ -25,7 +25,7 @@ function logger(msg) {
     const formattedMsg = `[${timestamp}] ${msg}`;
     console.log(formattedMsg);
     panelLogs.push(formattedMsg);
-    if (panelLogs.length > 20) panelLogs.shift(); // Bound log memory limit
+    if (panelLogs.length > 20) panelLogs.shift(); 
 }
 
 // ==========================================
@@ -66,10 +66,7 @@ function startBot() {
     // AUTO-RESPAWN ENGINE (Triggers instantly upon death)
     bot.on('death', () => {
         logger('⚠️ CommanderBot died! Triggering auto-respawn system...');
-        
-        // Safely clear out active holding configurations to avoid post-death glitch loops
         if (holdInterval) { clearInterval(holdInterval); holdInterval = null; }
-        
         try {
             bot.respawn();
             logger('✅ Respawn package sent. Bot successfully respawned at its spawn anchor.');
@@ -88,7 +85,7 @@ function startBot() {
     bot.on('kick', (reason) => {
         logger(`Kicked from server: ${reason}`);
         stopBot();
-        setTimeout(startBot, 15000); // Reconnect loop check
+        setTimeout(startBot, 15000); 
     });
     bot.on('error', (err) => {
         logger(`Connection error: ${err.message}`);
@@ -247,7 +244,6 @@ async function handleBotCommands(message) {
 const webServer = http.createServer((req, res) => {
     const urlObj = new URL(req.url, `http://${req.headers.host}`);
     
-    // Core Panel Form Button routing handles
     if (urlObj.pathname === '/action') {
         const action = urlObj.searchParams.get('cmd');
         if (action === 'start') startBot();
@@ -265,3 +261,9 @@ const webServer = http.createServer((req, res) => {
     const logItemsHtml = panelLogs.map(l => `<div style="padding:4px 0; border-bottom:1px solid #2d3748;">${l}</div>`).reverse().join('');
 
     res.end(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>CommanderBot Console</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
