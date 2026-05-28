@@ -9,7 +9,9 @@ const botOptions = {
     host: 'SurvivalSeries125.aternos.me', 
     port: 24606, 
     username: 'CommanderBot',
-    version: false     
+    version: '1.21.1' // <-- Change this exact string from false to '1.21.1'
+};
+
 };
 
 let bot = null;
