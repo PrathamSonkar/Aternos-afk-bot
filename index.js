@@ -9,9 +9,7 @@ const botOptions = {
     host: 'SurvivalSeries125.aternos.me', 
     port: 24606, 
     username: 'CommanderBot',
-    version: '1.21.1' // <-- Change this exact string from false to '1.21.1'
-};
-
+    version: '1.21.1'
 };
 
 let bot = null;
@@ -202,7 +200,7 @@ const webServer = http.createServer(async (req, res) => {
             const rawCmd = urlObj.searchParams.get('text').trim();
             if (rawCmd) {
                 logger(`[Console Input] executing: ${rawCmd}`);
-                await handleBotCommands(rawCmd.toLowerCase());
+                await handleBotCommands(rawCmd);
             }
         }
         res.writeHead(302, { 'Location': '/' });
