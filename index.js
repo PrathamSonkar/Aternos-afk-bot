@@ -3,7 +3,7 @@ const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
 const autoeat = require('mineflayer-auto-eat').plugin; 
 
 // CONFIGURATION: Change to your exact in-game name
-const OWNER_NAME = 'YourMinecraftName'; 
+const OWNER_NAME = 'NinjaWarrior10998'; 
 
 const botOptions = {
     host: 'SurvivalSeries125.aternos.me', 
