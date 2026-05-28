@@ -184,7 +184,6 @@ function createBotInstance() {
 
             case 'drop':
                 bot.chat("Dropping inventory!");
-                // FIXED TYPO HERE (Changed from 'for...of item' to avoid loop crashes)
                 for (const item of bot.inventory.items()) {
                     try { 
                         await bot.dropItem(item); 
@@ -222,7 +221,6 @@ const webServer = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('Minecraft bot environment is healthy and operational.\n');
 });
-// Satisfies Railway web checks to guarantee continuous uptime
 webServer.listen(process.env.PORT || 3000, () => {
     console.log(`[Railway] Internal web port bound to ${process.env.PORT || 3000}`);
 });
