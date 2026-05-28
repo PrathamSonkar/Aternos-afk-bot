@@ -22,18 +22,16 @@ let db = null;
 // 1. CONNECT TO RAILWAY DATABASE (REDIS)
 // ==========================================
 async function startDatabase() {
-    if (process.env.REDIS_URL) {
-        try {
-            db = createClient({ url: process.env.REDIS_URL });
-            db.on('error', (err) => console.log('[Database Error]', err.message));
-            await db.connect();
-            console.log('[Database] Connected to Railway Redis successfully!');
-        } catch (err) {
-            console.log('[Database] Connection failed, using fallback memory:', err.message);
-            db = null;
-        }
-    } else {
-        console.log('[Database] No REDIS_URL found. Please add the Redis plugin in Railway.');
+    // Uses your added Redis URL string automatically via env fallback
+    const redisUrl = process.env.REDIS_URL || 'redis://default:NekSZswIGiFoekfVbXWQRkhuKKWFOorW@redis.railway.internal:6379';
+    try {
+        db = createClient({ url: redisUrl });
+        db.on('error', (err) => console.log('[Database Error]', err.message));
+        await db.connect();
+        console.log('[Database] Connected to Railway Redis successfully!');
+    } catch (err) {
+        console.log('[Database] Connection failed, using fallback memory:', err.message);
+        db = null;
     }
 }
 
@@ -221,12 +219,6 @@ const webServer = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('Minecraft bot environment is healthy and operational.\n');
 });
-
-// Force dynamic port mapping assignment to link the internal network bridge
-const webPort = process.env.PORT || 3000;
-webServer.listen(webPort, '0.0.0.0', () => {
-    console.log(`[Railway] Internal web port bound to ${webPort} on all network interfaces`);
-});
-
+webServer.listen(process.env.PORT || 3000, () => {
     console.log(`[Railway] Internal web port bound to ${process.env.PORT || 3000}`);
 });
