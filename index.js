@@ -221,6 +221,12 @@ const webServer = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('Minecraft bot environment is healthy and operational.\n');
 });
-webServer.listen(process.env.PORT || 3000, () => {
+
+// Force dynamic port mapping assignment to link the internal network bridge
+const webPort = process.env.PORT || 3000;
+webServer.listen(webPort, '0.0.0.0', () => {
+    console.log(`[Railway] Internal web port bound to ${webPort} on all network interfaces`);
+});
+
     console.log(`[Railway] Internal web port bound to ${process.env.PORT || 3000}`);
 });
