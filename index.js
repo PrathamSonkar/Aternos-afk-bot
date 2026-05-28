@@ -2,7 +2,7 @@ const mineflayer = require('mineflayer');
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
 
 // CONFIGURATION: Change to your exact in-game name
-const OWNER_NAME = 'YourMinecraftName'; 
+const OWNER_NAME = 'NinjaWarrior'; 
 
 const botOptions = {
     host: 'SurvivalSeries125.aternos.me', 
