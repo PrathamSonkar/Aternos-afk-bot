@@ -53,7 +53,7 @@ function triggerReconnect() {
 }
 
 function startBot() {
-    if (bot || isConnecting) return logger('⚠️ Bot block: Startup already in progress.');
+    if (bot || isConnecting) return;
     logger('🚀 Connecting bot directly to server...'); 
     isConnecting = true; 
     
@@ -134,7 +134,7 @@ const webServer = http.createServer(async (req, res) => {
             if (act === 'stop') stopBot();
             if (act === 'afk') await handleBotCommands('afk');
             if (act === 'clear_stop') await handleBotCommands('stop');
-            if (action === 'console' && urlObj.searchParams.has('text')) {
+            if (act === 'console' && urlObj.searchParams.has('text')) {
                 const raw = urlObj.searchParams.get('text').trim();
                 if (raw) await handleBotCommands(raw.toLowerCase());
             }
