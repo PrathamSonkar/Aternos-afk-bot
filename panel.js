@@ -7,9 +7,10 @@ function getDuration(bot, spawnTime) {
     return `<span style="color:#a855f7; font-weight:bold;">${hrs}h ${mins}m ${secs}s</span>`;
 }
 
-function renderPanel(bot, spawnTime, panelLogs) {
+// Fixed: Destructured arguments to accept the configuration object correctly
+function renderPanel({ bot, spawnTime, panelLogs }) {
     const statusText = bot ? '<span style="color:#2ecc71;">ONLINE</span>' : '<span style="color:#e74c3c;">OFFLINE</span>';
-    const logItems = panelLogs.map(l => `<div style="padding:4px 0;border-bottom:1px solid #2d3748;">${l}</div>`).reverse().join('');
+    const logItems = (panelLogs || []).map(l => `<div style="padding:4px 0;border-bottom:1px solid #2d3748;">${l}</div>`).reverse().join('');
     
     let invHtml = '<span style="color:#718096; font-style: italic;">Inventory hidden or bot offline</span>';
     if (bot && bot.inventory) {
@@ -76,4 +77,3 @@ function renderPanel(bot, spawnTime, panelLogs) {
 }
 
 module.exports = { renderPanel };
-
