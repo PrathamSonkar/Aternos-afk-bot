@@ -9,7 +9,7 @@ const botOptions = {
     host: 'SurvivalSeries125.aternos.me', 
     port: 24606, 
     username: 'CommanderBot',
-    version: '1.21.1'
+    version: '1.21.1' // Mineflayer requires standard notation format
 };
 
 let bot = null;
@@ -19,7 +19,7 @@ let autoEatInterval = null;
 let db = null;
 let panelLogs = []; 
 let spawnTime = null; 
-let reconnectTimeout = null; // Prevents overlapping reconnect loops
+let reconnectTimeout = null; 
 
 const EDIBLE_FOODS = [
     'cooked_beef', 'cooked_chicken', 'cooked_porkchop', 'cooked_mutton', 'cooked_cod', 'cooked_salmon', 
@@ -63,7 +63,7 @@ async function startDatabase() {
 }
 
 function triggerReconnect() {
-    if (reconnectTimeout) return; // Already scheduling a restart
+    if (reconnectTimeout) return; 
     logger('🔄 Scheduling reconnect in 15 seconds...');
     reconnectTimeout = setTimeout(() => {
         reconnectTimeout = null;
@@ -75,7 +75,6 @@ function startBot() {
     if (bot) return logger('Bot is already running.');
     logger('Starting Minecraft Bot...');
     
-    // Clear any leftover configurations safely
     if (autoEatInterval) clearInterval(autoEatInterval);
     if (afkInterval) clearInterval(afkInterval);
     if (holdInterval) clearInterval(holdInterval);
@@ -111,7 +110,6 @@ function startBot() {
         handleBotCommands(message.toLowerCase());
     });
 
-    // Separated cleanup from disconnection events to ensure loop reliability
     bot.on('kick', (reason) => { 
         logger(`Kicked: ${reason}`); 
         stopBot(); 
@@ -222,7 +220,6 @@ async function handleBotCommands(message) {
     }
 }
 
-// Fixed and completed web server snippet below
 const webServer = http.createServer(async (req, res) => {
     try {
         const urlObj = new URL(req.url, `http://${req.headers.host}`);
@@ -242,7 +239,6 @@ const webServer = http.createServer(async (req, res) => {
             }
         }
         
-        // Render web management UI
         res.writeHead(200, { 'Content-Type': 'text/html' });
         res.end(renderPanel({ bot, panelLogs, spawnTime }));
     } catch (e) {
@@ -251,11 +247,11 @@ const webServer = http.createServer(async (req, res) => {
     }
 });
 
-// Start initialization routines
 startDatabase().then(() => {
     startBot();
     const PORT = process.env.PORT || 3000;
-    webServer.listen(PORT, () => {
+    // Binding explicitly to '0.0.0.0' enables web connectivity inside Railway routing proxies
+    webServer.listen(PORT, '0.0.0.0', () => {
         logger(`Web panel UI server active on port ${PORT}`);
     });
 });
