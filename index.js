@@ -16,12 +16,12 @@ function logger(msg) {
     if (panelLogs.length > 20) panelLogs.shift(); 
 }
 
-function checkAndCalculateMath(message) {
-    if (!/^([0-9\s.+\-*/()]+)$/.test(message)) return null;
+function checkAndCalculateMath(msg) {
+    if (!/^([0-9\s.+\-*/()]+)$/.test(msg)) return null;
     try {
-        const cleanExpression = message.replace(/[^0-9.+\-*/()]/g, '');
-        const result = Function(`"use strict"; return (${cleanExpression})`)();
-        if (typeof result === 'number' && !isNaN(result) && isFinite(result)) return result;
+        const clean = msg.replace(/[^0-9.+\-*/()]/g, '');
+        const res = Function(`"use strict"; return (${clean})`)();
+        if (typeof res === 'number' && !isNaN(res) && isFinite(res)) return res;
     } catch (e) {}
     return null;
 }
@@ -54,7 +54,6 @@ function startBot() {
     logger('🚀 Connecting bot...'); isConnecting = true; 
     if (autoEatInterval) clearInterval(autoEatInterval);
     if (afkInterval) clearInterval(afkInterval);
-
     try { bot = mineflayer.createBot(botOptions); bot.loadPlugin(pathfinder); } 
     catch (err) { logger(`❌ Error: ${err.message}`); isConnecting = false; triggerReconnect(); return; }
 
@@ -64,17 +63,14 @@ function startBot() {
         bot.pathfinder.setMovements(new Movements(bot)); autoEatInterval = setInterval(checkAndEat, 5000);
         if (autoSleepMode) setTimeout(executeSleepRoutine, 3000);
     });
-
     bot.on('wake', () => { if (autoSleepMode) setTimeout(executeSleepRoutine, 5000); });
     bot.on('death', () => { if (bot && !bot.isAlive) bot.respawn(); });
-    
-    bot.on('chat', (username, message) => {
-        const cleanMessage = message.trim();
-        const mathResult = checkAndCalculateMath(cleanMessage);
-        if (mathResult !== null) return bot.chat(`📊 Math Answer: ${cleanMessage} = ${mathResult}`);
-        if (username === OWNER_NAME) handleBotCommands(cleanMessage.toLowerCase());
+    bot.on('chat', (user, msg) => {
+        const clean = msg.trim();
+        const calc = checkAndCalculateMath(clean);
+        if (calc !== null) return bot.chat(`📊 Math Answer: ${clean} = ${calc}`);
+        if (user === OWNER_NAME) handleBotCommands(clean.toLowerCase());
     });
-
     bot.on('kick', (r) => { logger(`❌ Kicked: ${r}`); stopBot(); triggerReconnect(); });
     bot.on('error', (e) => { logger(`❌ Error: ${e.message}`); stopBot(); triggerReconnect(); });
     bot.on('end', () => { logger('🔌 Disconnected.'); stopBot(); triggerReconnect(); });
@@ -88,42 +84,35 @@ function stopBot() {
     if (bot) { try { bot.pathfinder.setGoal(null); bot.clearControlStates(); bot.quit(); } catch (e) {} bot.removeAllListeners(); bot = null; }
 }
 
-async function handleBotCommands(message) {
-    const args = message.split(' '), command = args[0]; // FIXED: Corrected token string variable tracking
-    if (!bot && command !== 'stop') return;
-
-    switch (command) {
-        case 'come':
-            const p = bot.players[OWNER_NAME]?.entity;
-            if (!p) return bot.chat("Can't see you.");
-            bot.pathfinder.setGoal(new goals.GoalFollow(p, 1), true); break;
-        case 'afk':
-            if (afkInterval) return; autoSleepMode = false;
-            afkInterval = setInterval(() => { bot.setControlState('jump', true); setTimeout(() => bot.setControlState('jump', false), 500); bot.look(bot.entity.yaw + 1.5, 0); }, 2000); break;
-        case 'sleep':
-            autoSleepMode = true; logger("🛌 Auto-Sleep enabled."); executeSleepRoutine(); break;
-        case 'stop':
-            autoSleepMode = false; logger("🛑 Loop stopped.");
-            if (afkInterval) { clearInterval(afkInterval); afkInterval = null; }
-            if (bot?.isSleeping) { try { await bot.wake(); } catch(e){} }
-            bot?.pathfinder.setGoal(null); bot?.clearControlStates(); break;
-        case 'status':
-            bot.chat(`HP: ${Math.round(bot.health)} | Food: ${bot.food} | Sleeping: ${bot.isSleeping}`); break;
-    }
+async function handleBotCommands(msg) {
+    const args = msg.split(' '), cmd = args[0];
+    if (!bot && cmd !== 'stop') return;
+    if (cmd === 'come') {
+        const p = bot.players[OWNER_NAME]?.entity;
+        if (p) bot.pathfinder.setGoal(new goals.GoalFollow(p, 1), true);
+    } else if (cmd === 'afk') {
+        if (afkInterval) return; autoSleepMode = false;
+        afkInterval = setInterval(() => { bot.setControlState('jump', true); setTimeout(() => bot.setControlState('jump', false), 500); bot.look(bot.entity.yaw + 1.5, 0); }, 2000);
+    } else if (cmd === 'sleep') { autoSleepMode = true; logger("A-Sleep enabled."); executeSleepRoutine(); 
+    } else if (cmd === 'stop') {
+        autoSleepMode = false; if (afkInterval) { clearInterval(afkInterval); afkInterval = null; }
+        if (bot?.isSleeping) { try { await bot.wake(); } catch(e){} }
+        bot?.pathfinder.setGoal(null); bot?.clearControlStates();
+    } else if (cmd === 'status') { bot.chat(`HP: ${Math.round(bot.health)} | Food: ${bot.food} | SleepMode: ${autoSleepMode}`); }
 }
 
 const webServer = http.createServer(async (req, res) => {
     try {
         const urlObj = new URL(req.url, `http://${req.headers.host}`);
         if (urlObj.pathname === '/action') {
-            const action = urlObj.searchParams.get('cmd');
-            if (action === 'start') startBot();
-            if (action === 'stop') stopBot();
-            if (action === 'afk') await handleBotCommands('afk');
-            if (action === 'clear_stop') await handleBotCommands('stop');
-            if (action === 'console' && urlObj.searchParams.has('text')) {
-                const rawCmd = urlObj.searchParams.get('text').trim();
-                if (rawCmd) await handleBotCommands(rawCmd.toLowerCase());
+            const act = urlObj.searchParams.get('cmd');
+            if (act === 'start') startBot();
+            if (act === 'stop') stopBot();
+            if (act === 'afk') await handleBotCommands('afk');
+            if (act === 'clear_stop') await handleBotCommands('stop');
+            if (act === 'console' && urlObj.searchParams.has('text')) {
+                const raw = urlObj.searchParams.get('text').trim();
+                if (raw) await handleBotCommands(raw.toLowerCase());
             }
         }
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(renderPanel({ bot, panelLogs, spawnTime }));
@@ -131,4 +120,4 @@ const webServer = http.createServer(async (req, res) => {
 });
 
 startBot();
-webServer.listen(process.env.PORT || 8080, '0.0.0.0', () => { logger(`Server active on port ${process.env.PORT || 8080}`); });
+webServer.listen(process.env.PORT || 8080, '0.0.0.0', () => { logger(`Server running on port ${process.env.PORT || 8080}`); });
