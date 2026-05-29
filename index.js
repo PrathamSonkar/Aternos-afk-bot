@@ -6,8 +6,8 @@ const { renderPanel } = require('./panel');
 
 const OWNER_NAME = 'NinjaWarrior'; 
 const botOptions = {
-    host: 'SurvivalSeries125.aternos.me', 
-    port: 24606, 
+    host: 'carp.aternos.host', // Updated to your dynamic Aternos host
+    port: 24606,               // Updated to your dynamic port number
     username: 'CommanderBot',
     version: '1.21.1'
 };
@@ -148,7 +148,7 @@ function stopBot() {
 
 async function handleBotCommands(message) {
     const args = message.split(' ');
-    const command = args[0]; // Fixed: Changed from 'args' back to 'args[0]' so text matching functions correctly
+    const command = args[0]; 
     if (!bot && ['stop', 'status'].includes(command) === false) return;
 
     switch (command) {
@@ -222,6 +222,7 @@ async function handleBotCommands(message) {
     }
 }
 
+// Re-structured and fully restored web panel loop structure below
 const webServer = http.createServer(async (req, res) => {
     try {
         const urlObj = new URL(req.url, `http://${req.headers.host}`);
@@ -251,8 +252,8 @@ const webServer = http.createServer(async (req, res) => {
 
 startDatabase().then(() => {
     startBot();
-    // Force the server to listen to port 3000 to match Railway's proxy configuration
     const PORT = process.env.PORT || 3000;
+    // Binding explicitly to '0.0.0.0' allows Railway's web traffic proxies to route to this app
     webServer.listen(PORT, '0.0.0.0', () => {
         logger(`Web panel UI server active on port ${PORT}`);
     });
