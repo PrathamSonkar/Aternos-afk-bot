@@ -1,9 +1,9 @@
 {
   "name": "aternos-afk-bot",
   "version": "1.0.0",
-  "main": "intex.js",
+  "main": "index.js",
   "scripts": {
-    "start": "node intex.js"
+    "start": "node index.js"
   },
   "dependencies": {
     "mineflayer": "^4.20.0",
@@ -11,3 +11,4 @@
     "redis": "^4.6.13"
   }
 }
+
