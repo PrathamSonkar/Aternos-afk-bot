@@ -12,20 +12,10 @@ const botOptions = {
     version: '1.21.1'
 };
 
-let bot = null;
-let afkInterval = null;
-let holdInterval = null;
-let autoEatInterval = null; 
-let db = null;
-let panelLogs = []; 
-let spawnTime = null; 
-let reconnectTimeout = null; 
-let isConnecting = false; 
+let bot = null, afkInterval = null, holdInterval = null, autoEatInterval = null; 
+let db = null, panelLogs = [], spawnTime = null, reconnectTimeout = null, isConnecting = false; 
 
-const EDIBLE_FOODS = [
-    'cooked_beef', 'cooked_chicken', 'cooked_porkchop', 'cooked_mutton', 'cooked_cod', 'cooked_salmon', 
-    'bread', 'baked_potato', 'golden_carrot', 'apple', 'carrot', 'melon_slice', 'sweet_berries'
-];
+const EDIBLE_FOODS = ['cooked_beef', 'cooked_chicken', 'cooked_porkchop', 'cooked_mutton', 'cooked_cod', 'cooked_salmon', 'bread', 'baked_potato', 'golden_carrot', 'apple', 'carrot', 'melon_slice', 'sweet_berries'];
 
 function logger(msg) {
     const timestamp = new Date().toLocaleTimeString();
@@ -39,15 +29,11 @@ async function checkAndEat() {
     if (!bot || !bot.inventory || bot.food >= 15) return;
     const foodItem = bot.inventory.items().find(item => EDIBLE_FOODS.includes(item.name));
     if (!foodItem) return; 
-
-    logger(`🍖 Bot hunger low (${bot.food}/20). Eating ${foodItem.name}...`);
+    logger(`🍖 Eating ${foodItem.name}...`);
     try {
         await bot.equip(foodItem, 'hand');
         await bot.consume();
-        logger(`✅ Successfully ate ${foodItem.name}.`);
-    } catch (err) {
-        logger(`❌ Failed to eat food: ${err.message}`);
-    }
+    } catch (err) { logger(`❌ Eat failed: ${err.message}`); }
 }
 
 async function startDatabase() {
@@ -57,27 +43,18 @@ async function startDatabase() {
         db.on('error', (err) => logger(`[DB Error] ${err.message}`));
         await db.connect();
         logger('Connected to Railway Redis successfully!');
-    } catch (err) {
-        logger(`DB Connection failed: ${err.message}`);
-        db = null;
-    }
+    } catch (err) { logger(`DB Connection failed: ${err.message}`); db = null; }
 }
 
 function triggerReconnect() {
     if (reconnectTimeout) return; 
     logger('🔄 Waiting 15 seconds to safely retry...');
-    reconnectTimeout = setTimeout(() => {
-        reconnectTimeout = null;
-        startBot();
-    }, 15000);
+    reconnectTimeout = setTimeout(() => { reconnectTimeout = null; startBot(); }, 15000);
 }
 
 function startBot() {
-    if (bot || isConnecting) {
-        return logger('⚠️ Bot startup blocked: Connection routine already running.');
-    }
-    
-    logger('🚀 Initializing connection parameters...');
+    if (bot || isConnecting) return logger('⚠️ Bot connection routine already running.');
+    logger('🚀 Connecting bot...');
     isConnecting = true; 
 
     if (autoEatInterval) clearInterval(autoEatInterval);
@@ -88,125 +65,76 @@ function startBot() {
         bot = mineflayer.createBot(botOptions);
         bot.loadPlugin(pathfinder);
     } catch (err) {
-        logger(`❌ Critical creation error: ${err.message}`);
-        isConnecting = false;
-        triggerReconnect();
-        return;
+        logger(`❌ Creation error: ${err.message}`);
+        isConnecting = false; triggerReconnect(); return;
     }
 
     bot.once('spawn', () => {
-        logger(`✅ Bot successfully joined! Listening for: ${OWNER_NAME}`);
-        isConnecting = false; 
-        spawnTime = Date.now(); 
-        const defaultMovements = new Movements(bot);
-        bot.pathfinder.setMovements(defaultMovements);
-
-        if (autoEatInterval) clearInterval(autoEatInterval);
+        logger(`✅ Bot joined! Owner: ${OWNER_NAME}`);
+        isConnecting = false; spawnTime = Date.now(); 
+        bot.pathfinder.setMovements(new Movements(bot));
         autoEatInterval = setInterval(checkAndEat, 5000);
     });
 
     bot.on('death', () => {
-        logger('⚠️ Bot died! Preparing to auto-respawn...');
+        logger('⚠️ Bot died! Respawning...');
         if (holdInterval) { clearInterval(holdInterval); holdInterval = null; }
-        setTimeout(() => {
-            try { 
-                if (bot && bot.isAlive === false) {
-                    bot.respawn(); 
-                    logger('✅ Auto-respawn executed successfully.'); 
-                }
-            } catch (e) { logger(`❌ Auto-respawn failed: ${e.message}`); }
-        }, 1000);
+        setTimeout(() => { if (bot && !bot.isAlive) bot.respawn(); }, 1000);
     });
 
-    bot.on('chat', async (username, message) => {
-        if (username !== OWNER_NAME) return;
-        handleBotCommands(message.toLowerCase());
+    bot.on('chat', (username, message) => {
+        if (username === OWNER_NAME) handleBotCommands(message.toLowerCase());
     });
 
-    bot.on('kick', (reason) => { 
-        logger(`❌ Kicked from server: ${reason}`); 
-        stopBot(); 
-        triggerReconnect(); 
-    });
-    
-    bot.on('error', (err) => { 
-        logger(`❌ Connection error: ${err.message}`); 
-        stopBot(); 
-        triggerReconnect(); 
-    });
-    
-    bot.on('end', () => { 
-        logger('🔌 Disconnected from server pipeline.'); 
-        stopBot(); 
-        triggerReconnect(); 
-    });
+    bot.on('kick', (r) => { logger(`❌ Kicked: ${r}`); stopBot(); triggerReconnect(); });
+    bot.on('error', (e) => { logger(`❌ Error: ${e.message}`); stopBot(); triggerReconnect(); });
+    bot.on('end', () => { logger('🔌 Disconnected.'); stopBot(); triggerReconnect(); });
 }
 
 function stopBot() {
-    logger('🧹 Clearing old bot instances...');
-    spawnTime = null; 
-    isConnecting = false; 
+    logger('🧹 Clearing instances...');
+    spawnTime = null; isConnecting = false; 
     if (afkInterval) { clearInterval(afkInterval); afkInterval = null; }
     if (holdInterval) { clearInterval(holdInterval); holdInterval = null; }
     if (autoEatInterval) { clearInterval(autoEatInterval); autoEatInterval = null; }
     if (bot) {
-        try { 
-            bot.pathfinder.setGoal(null); 
-            bot.clearControlStates(); 
-            bot.quit(); 
-        } catch (e) {}
-        bot.removeAllListeners();
-        bot = null;
+        try { bot.pathfinder.setGoal(null); bot.clearControlStates(); bot.quit(); } catch (e) {}
+        bot.removeAllListeners(); bot = null;
     }
 }
 
 async function handleBotCommands(message) {
     const args = message.split(' ');
-    const command = args[0]; // Fixed syntax structure match format
-    if (!bot && ['stop', 'status'].includes(command) === false) return;
+    const command = args[0]; 
+    if (!bot && !['stop', 'status'].includes(command)) return;
 
     switch (command) {
         case 'setpos':
-            const currentPos = bot.entity.position;
-            const posData = { x: Math.floor(currentPos.x), y: Math.floor(currentPos.y), z: Math.floor(currentPos.z) };
-            if (db) {
-                await db.set('saved_bot_position', JSON.stringify(posData));
-                bot.chat(`Permanent save: X:${posData.x} Y:${posData.y} Z:${posData.z}`);
-            } else {
-                bot.chat("Temporary memory save complete.");
-                global.tempPos = posData;
-            }
+            const pos = bot.entity.position;
+            const posData = { x: Math.floor(pos.x), y: Math.floor(pos.y), z: Math.floor(pos.z) };
+            if (db) { await db.set('saved_bot_position', JSON.stringify(posData)); } 
+            else { global.tempPos = posData; }
+            bot.chat(`Saved Pos: X:${posData.x} Y:${posData.y} Z:${posData.z}`);
             break;
         case 'gopos':
-            let targetPos = null;
-            if (db) {
-                const stored = await db.get('saved_bot_position');
-                if (stored) targetPos = JSON.parse(stored);
-            } else { targetPos = global.tempPos; }
-            if (!targetPos) return bot.chat("Type 'setpos' first.");
-            bot.pathfinder.setGoal(new goals.GoalBlock(targetPos.x, targetPos.y, targetPos.z), false);
+            let target = db ? JSON.parse(await db.get('saved_bot_position')) : global.tempPos;
+            if (!target) return bot.chat("Type 'setpos' first.");
+            bot.pathfinder.setGoal(new goals.GoalBlock(target.x, target.y, target.z), false);
             break;
         case 'come':
-            const p = bot.players[OWNER_NAME];
-            if (!p || !p.entity) return bot.chat("Can't see you.");
-            bot.pathfinder.setGoal(new goals.GoalFollow(p.entity, 1), true);
+            const p = bot.players[OWNER_NAME]?.entity;
+            if (!p) return bot.chat("Can't see you.");
+            bot.pathfinder.setGoal(new goals.GoalFollow(p, 1), true);
             break;
         case 'mine':
-            const bName = args[1]; 
-            if (!bName) return bot.chat("Specify a block!");
-            const bType = bot.registry.blocksByName[bName];
+            const bType = bot.registry.blocksByName[args[1]];
             if (!bType) return bot.chat("Unknown block.");
             const block = bot.findBlock({ matching: bType.id, maxDistance: 32 });
-            if (!block) return bot.chat("None found nearby.");
+            if (!block) return bot.chat("None found.");
             try {
                 await bot.pathfinder.goto(new goals.GoalLookAtBlock(block.position, bot.world));
                 await bot.dig(block);
             } catch (err) { bot.chat(`Error: ${err.message}`); }
-            break;
-        case 'bed':
-            const bed = bot.findBlock({ matching: (b) => b.name.includes('bed'), maxDistance: 5 });
-            if (!bed) return bot.chat("No bed found.");
-            try { await bot.lookAt(bed.position); await bot.activateBlock(bed); } catch (e) {}
             break;
         case 'hold':
             if (holdInterval) { clearInterval(holdInterval); holdInterval = null; bot.deactivateItem(); }
@@ -222,16 +150,11 @@ async function handleBotCommands(message) {
             break;
         case 'stop':
             if (afkInterval) { clearInterval(afkInterval); afkInterval = null; }
-            if (holdInterval) { clearInterval(holdInterval); holdInterval = null; if (bot) bot.deactivateItem(); }
-            if (bot) { bot.pathfinder.setGoal(null); bot.clearControlStates(); }
+            if (holdInterval) { clearInterval(holdInterval); holdInterval = null; bot.deactivateItem(); }
+            bot.pathfinder.setGoal(null); bot.clearControlStates();
             break;
         case 'status':
-            if (bot) bot.chat(`HP: ${Math.round(bot.health)} | Food: ${bot.food}`);
-            break;
-        case 'drop':
-            for (const item of bot.inventory.items()) { 
-                try { await bot.dropItem(item); } catch (e) {} 
-            }
+            bot.chat(`HP: ${Math.round(bot.health)} | Food: ${bot.food}`);
             break;
     }
 }
@@ -245,28 +168,22 @@ const webServer = http.createServer(async (req, res) => {
             if (action === 'stop') stopBot();
             if (action === 'afk') await handleBotCommands('afk');
             if (action === 'clear_stop') await handleBotCommands('stop');
-            
             if (action === 'console' && urlObj.searchParams.has('text')) {
                 const rawCmd = urlObj.searchParams.get('text').trim();
-                if (rawCmd) {
-                    logger(`[Console Input] executing: ${rawCmd}`);
-                    if (bot) bot.chat(rawCmd);
-                }
+                if (rawCmd && bot) bot.chat(rawCmd);
             }
         }
-        
         res.writeHead(200, { 'Content-Type': 'text/html' });
         res.end(renderPanel({ bot, panelLogs, spawnTime }));
     } catch (e) {
         res.writeHead(500, { 'Content-Type': 'text/plain' });
-        res.end(`Internal Server Error: ${e.message}`);
+        res.end(`Server Error: ${e.message}`);
     }
 });
 
 startDatabase().then(() => {
     startBot();
-    const PORT = process.env.PORT || 3000;
-    webServer.listen(PORT, '0.0.0.0', () => {
-        logger(`Web panel UI server active on port ${PORT}`);
+    webServer.listen(process.env.PORT || 3000, '0.0.0.0', () => {
+        logger(`Server running on port ${process.env.PORT || 3000}`);
     });
 });
