@@ -44,44 +44,68 @@ async function executeSleepRoutine() {
 }
 
 function triggerReconnect() {
-    if (reconnectTimeout || bot) return;
-    logger('🔄 Retrying connection in 15 seconds...');
-    reconnectTimeout = setTimeout(() => { reconnectTimeout = null; startBot(); }, 15000);
+    if (reconnectTimeout) return;
+    logger('🔄 Scheduling hard reconnect sequence in 15 seconds...');
+    reconnectTimeout = setTimeout(() => { 
+        reconnectTimeout = null; 
+        startBot(); 
+    }, 15000);
 }
 
 function startBot() {
-    if (bot || isConnecting) return;
-    logger('🚀 Connecting bot...'); isConnecting = true; 
+    if (bot || isConnecting) return logger('⚠️ Bot block: Startup already in progress.');
+    logger('🚀 Connecting bot directly to server...'); 
+    isConnecting = true; 
+    
     if (autoEatInterval) clearInterval(autoEatInterval);
     if (afkInterval) clearInterval(afkInterval);
-    try { bot = mineflayer.createBot(botOptions); bot.loadPlugin(pathfinder); } 
-    catch (err) { logger(`❌ Error: ${err.message}`); isConnecting = false; triggerReconnect(); return; }
+
+    try { 
+        bot = mineflayer.createBot(botOptions); 
+        bot.loadPlugin(pathfinder); 
+    } catch (err) { 
+        logger(`❌ Critical setup error: ${err.message}`); 
+        isConnecting = false; 
+        triggerReconnect(); 
+        return; 
+    }
 
     bot.once('spawn', () => {
-        logger(`✅ Bot joined!`); isConnecting = false; spawnTime = Date.now(); 
+        logger(`✅ Bot fully spawned inside server!`); 
+        isConnecting = false; 
+        spawnTime = Date.now(); 
         if (reconnectTimeout) { clearTimeout(reconnectTimeout); reconnectTimeout = null; }
-        bot.pathfinder.setMovements(new Movements(bot)); autoEatInterval = setInterval(checkAndEat, 5000);
+        bot.pathfinder.setMovements(new Movements(bot)); 
+        autoEatInterval = setInterval(checkAndEat, 5000);
         if (autoSleepMode) setTimeout(executeSleepRoutine, 3000);
     });
+
     bot.on('wake', () => { if (autoSleepMode) setTimeout(executeSleepRoutine, 5000); });
     bot.on('death', () => { if (bot && !bot.isAlive) bot.respawn(); });
+    
     bot.on('chat', (user, msg) => {
         const clean = msg.trim();
         const calc = checkAndCalculateMath(clean);
         if (calc !== null) return bot.chat(`📊 Math Answer: ${clean} = ${calc}`);
         if (user === OWNER_NAME) handleBotCommands(clean.toLowerCase());
     });
-    bot.on('kick', (r) => { logger(`❌ Kicked: ${r}`); stopBot(); triggerReconnect(); });
-    bot.on('error', (e) => { logger(`❌ Error: ${e.message}`); stopBot(); triggerReconnect(); });
-    bot.on('end', () => { logger('🔌 Disconnected.'); stopBot(); triggerReconnect(); });
+
+    bot.on('kick', (r) => { logger(`❌ Kicked from world: ${r}`); stopBot(); triggerReconnect(); });
+    bot.on('error', (e) => { logger(`❌ Stream connection error: ${e.message}`); stopBot(); triggerReconnect(); });
+    bot.on('end', () => { logger('🔌 Server disconnected the pipeline.'); stopBot(); triggerReconnect(); });
 }
 
 function stopBot() {
-    logger('🧹 Clearing instances...'); spawnTime = null; isConnecting = false; 
-    if (reconnectTimeout) { clearTimeout(reconnectTimeout); reconnectTimeout = null; }
+    logger('🧹 Executing absolute connection instance cleanup...'); 
+    spawnTime = null; 
+    isConnecting = false; 
     if (afkInterval) { clearInterval(afkInterval); afkInterval = null; }
     if (autoEatInterval) { clearInterval(autoEatInterval); autoEatInterval = null; }
-    if (bot) { try { bot.pathfinder.setGoal(null); bot.clearControlStates(); bot.quit(); } catch (e) {} bot.removeAllListeners(); bot = null; }
+    if (bot) { 
+        try { bot.pathfinder.setGoal(null); bot.clearControlStates(); bot.quit(); } catch (e) {} 
+        bot.removeAllListeners(); 
+        bot = null; 
+    }
 }
 
 async function handleBotCommands(msg) {
@@ -110,7 +134,7 @@ const webServer = http.createServer(async (req, res) => {
             if (act === 'stop') stopBot();
             if (act === 'afk') await handleBotCommands('afk');
             if (act === 'clear_stop') await handleBotCommands('stop');
-            if (act === 'console' && urlObj.searchParams.has('text')) {
+            if (action === 'console' && urlObj.searchParams.has('text')) {
                 const raw = urlObj.searchParams.get('text').trim();
                 if (raw) await handleBotCommands(raw.toLowerCase());
             }
