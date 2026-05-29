@@ -20,7 +20,7 @@ let db = null;
 let panelLogs = []; 
 let spawnTime = null; 
 let reconnectTimeout = null; 
-let isConnecting = false; // NEW: Prevents overlapping clone processes
+let isConnecting = false; 
 
 const EDIBLE_FOODS = [
     'cooked_beef', 'cooked_chicken', 'cooked_porkchop', 'cooked_mutton', 'cooked_cod', 'cooked_salmon', 
@@ -78,7 +78,7 @@ function startBot() {
     }
     
     logger('🚀 Initializing connection parameters...');
-    isConnecting = true; // Block duplicate bots from spinning up
+    isConnecting = true; 
 
     if (autoEatInterval) clearInterval(autoEatInterval);
     if (afkInterval) clearInterval(afkInterval);
@@ -96,7 +96,7 @@ function startBot() {
 
     bot.once('spawn', () => {
         logger(`✅ Bot successfully joined! Listening for: ${OWNER_NAME}`);
-        isConnecting = false; // Reset block on successful connection
+        isConnecting = false; 
         spawnTime = Date.now(); 
         const defaultMovements = new Movements(bot);
         bot.pathfinder.setMovements(defaultMovements);
@@ -145,7 +145,7 @@ function startBot() {
 function stopBot() {
     logger('🧹 Clearing old bot instances...');
     spawnTime = null; 
-    isConnecting = false; // Clear lock during shutdown
+    isConnecting = false; 
     if (afkInterval) { clearInterval(afkInterval); afkInterval = null; }
     if (holdInterval) { clearInterval(holdInterval); holdInterval = null; }
     if (autoEatInterval) { clearInterval(autoEatInterval); autoEatInterval = null; }
@@ -162,7 +162,7 @@ function stopBot() {
 
 async function handleBotCommands(message) {
     const args = message.split(' ');
-    const command = args[0]; 
+    const command = args[0]; // Fixed syntax structure match format
     if (!bot && ['stop', 'status'].includes(command) === false) return;
 
     switch (command) {
@@ -267,4 +267,6 @@ startDatabase().then(() => {
     startBot();
     const PORT = process.env.PORT || 3000;
     webServer.listen(PORT, '0.0.0.0', () => {
-        
+        logger(`Web panel UI server active on port ${PORT}`);
+    });
+});
