@@ -7,7 +7,6 @@ function getDuration(bot, spawnTime) {
     return `<span style="color:#a855f7; font-weight:bold;">${hrs}h ${mins}m ${secs}s</span>`;
 }
 
-// Fixed: Destructured arguments to accept the configuration object correctly
 function renderPanel({ bot, spawnTime, panelLogs }) {
     const statusText = bot ? '<span style="color:#2ecc71;">ONLINE</span>' : '<span style="color:#e74c3c;">OFFLINE</span>';
     const logItems = (panelLogs || []).map(l => `<div style="padding:4px 0;border-bottom:1px solid #2d3748;">${l}</div>`).reverse().join('');
@@ -27,7 +26,7 @@ function renderPanel({ bot, spawnTime, panelLogs }) {
     }
 
     return `
-        <!DOCTYPE html><html><head><title>Console</title><meta name="viewport" content="width=device-width,initial-scale=1">
+        <!DOCTYPE html><html><head><meta charset="utf-8"><title>Console</title><meta name="viewport" content="width=device-width,initial-scale=1">
         <style>
             body{font-family:sans-serif;background:#1a202c;color:#e2e8f0;padding:20px;margin:0;}
             .box{max-width:650px;margin:20px auto;background:#2d3748;padding:20px;border-radius:8px;box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3);}
@@ -43,7 +42,7 @@ function renderPanel({ bot, spawnTime, panelLogs }) {
             .inv-card{background:#232d3f;padding:15px;border-radius:6px;margin-top:20px;border:1px solid #2d3748;}
             .cmd-list{font-size:11px;color:#94a3b8;margin-top:-15px;margin-bottom:15px;font-family:monospace;}
         </style>
-        <script>setTimeout(()=>{window.location.reload();},5000);</script></head><body><div class="box">
+        <script>setTimeout(()=>{window.location.reload();},4000);</script></head><body><div class="box">
         <h3>🤖 Bot Control Panel (${statusText})</h3>
         
         <div class="meta-bar">
@@ -55,6 +54,9 @@ function renderPanel({ bot, spawnTime, panelLogs }) {
             <a href="/action?cmd=stop" class="btn" style="background:#e74c3c;">Stop Bot</a>
             <a href="/action?cmd=afk" class="btn" style="background:#f1c40f;color:#000;">AFK Loop</a>
             <a href="/action?cmd=clear_stop" class="btn" style="background:#7f8c8d;">Clear Actions</a>
+            <!-- NEW UI INTERFACE COMMAND SHORTCUTS FOR PERSISTENT SLEEP STATE PROCESSING -->
+            <a href="/action?cmd=console&text=sleep" class="btn" style="background:#a855f7; grid-column: span 1;">🛌 Sleep Mode</a>
+            <a href="/action?cmd=console&text=stop" class="btn" style="background:#dc2626; grid-column: span 1;">⏰ Wake Up</a>
         </div>
 
         <h4>💻 Execute Command Terminal:</h4>
@@ -63,7 +65,7 @@ function renderPanel({ bot, spawnTime, panelLogs }) {
             <input type="text" name="text" class="input-box" placeholder="Type bot commands here..." required autocomplete="off">
             <button type="submit" class="send-btn">Execute</button>
         </form>
-        <div class="cmd-list">Available: come | status | drop | hold | setpos | gopos | bed | mine [block_name]</div>
+        <div class="cmd-list">Available: come | status | drop | hold | setpos | gopos | bed | mine [block_name] | sleep</div>
         
         <h4>Console Logs:</h4>
         <div class="console">${logItems}</div>
