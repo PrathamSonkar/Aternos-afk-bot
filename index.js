@@ -19,6 +19,7 @@ let autoEatInterval = null;
 let db = null;
 let panelLogs = []; 
 let spawnTime = null; 
+let reconnectTimeout = null; // Prevents overlapping reconnect loops
 
 const EDIBLE_FOODS = [
     'cooked_beef', 'cooked_chicken', 'cooked_porkchop', 'cooked_mutton', 'cooked_cod', 'cooked_salmon', 
@@ -61,9 +62,24 @@ async function startDatabase() {
     }
 }
 
+function triggerReconnect() {
+    if (reconnectTimeout) return; // Already scheduling a restart
+    logger('🔄 Scheduling reconnect in 15 seconds...');
+    reconnectTimeout = setTimeout(() => {
+        reconnectTimeout = null;
+        startBot();
+    }, 15000);
+}
+
 function startBot() {
     if (bot) return logger('Bot is already running.');
     logger('Starting Minecraft Bot...');
+    
+    // Clear any leftover configurations safely
+    if (autoEatInterval) clearInterval(autoEatInterval);
+    if (afkInterval) clearInterval(afkInterval);
+    if (holdInterval) clearInterval(holdInterval);
+
     bot = mineflayer.createBot(botOptions);
     bot.loadPlugin(pathfinder);
 
@@ -95,9 +111,24 @@ function startBot() {
         handleBotCommands(message.toLowerCase());
     });
 
-    bot.on('kick', (r) => { logger(`Kicked: ${r}`); stopBot(); setTimeout(startBot, 15000); });
-    bot.on('error', (e) => { logger(`Error: ${e.message}`); stopBot(); setTimeout(startBot, 15000); });
-    bot.on('end', () => { logger('Disconnected.'); stopBot(); setTimeout(startBot, 15000); });
+    // Separated cleanup from disconnection events to ensure loop reliability
+    bot.on('kick', (reason) => { 
+        logger(`Kicked: ${reason}`); 
+        stopBot(); 
+        triggerReconnect(); 
+    });
+    
+    bot.on('error', (err) => { 
+        logger(`Error: ${err.message}`); 
+        stopBot(); 
+        triggerReconnect(); 
+    });
+    
+    bot.on('end', () => { 
+        logger('Disconnected from server.'); 
+        stopBot(); 
+        triggerReconnect(); 
+    });
 }
 
 function stopBot() {
@@ -107,7 +138,11 @@ function stopBot() {
     if (holdInterval) { clearInterval(holdInterval); holdInterval = null; }
     if (autoEatInterval) { clearInterval(autoEatInterval); autoEatInterval = null; }
     if (bot) {
-        try { bot.pathfinder.setGoal(null); bot.clearControlStates(); bot.quit(); } catch (e) {}
+        try { 
+            bot.pathfinder.setGoal(null); 
+            bot.clearControlStates(); 
+            bot.quit(); 
+        } catch (e) {}
         bot.removeAllListeners();
         bot = null;
     }
@@ -187,36 +222,40 @@ async function handleBotCommands(message) {
     }
 }
 
+// Fixed and completed web server snippet below
 const webServer = http.createServer(async (req, res) => {
-    const urlObj = new URL(req.url, `http://${req.headers.host}`);
-    if (urlObj.pathname === '/action') {
-        const action = urlObj.searchParams.get('cmd');
-        if (action === 'start') startBot();
-        if (action === 'stop') stopBot();
-        if (action === 'afk') await handleBotCommands('afk');
-        if (action === 'clear_stop') await handleBotCommands('stop');
-        
-        if (action === 'console' && urlObj.searchParams.has('text')) {
-            const rawCmd = urlObj.searchParams.get('text').trim();
-            if (rawCmd) {
-                logger(`[Console Input] executing: ${rawCmd}`);
-                await handleBotCommands(rawCmd);
+    try {
+        const urlObj = new URL(req.url, `http://${req.headers.host}`);
+        if (urlObj.pathname === '/action') {
+            const action = urlObj.searchParams.get('cmd');
+            if (action === 'start') startBot();
+            if (action === 'stop') stopBot();
+            if (action === 'afk') await handleBotCommands('afk');
+            if (action === 'clear_stop') await handleBotCommands('stop');
+            
+            if (action === 'console' && urlObj.searchParams.has('text')) {
+                const rawCmd = urlObj.searchParams.get('text').trim();
+                if (rawCmd) {
+                    logger(`[Console Input] executing: ${rawCmd}`);
+                    if (bot) bot.chat(rawCmd);
+                }
             }
         }
-        res.writeHead(302, { 'Location': '/' });
-        return res.end();
+        
+        // Render web management UI
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end(renderPanel({ bot, panelLogs, spawnTime }));
+    } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end(`Internal Server Error: ${e.message}`);
     }
-    
-    res.writeHead(200, { 'Content-Type': 'text/html' });
-    res.end(renderPanel(bot, spawnTime, panelLogs));
 });
 
-const PORT = process.env.PORT || 3000;
-webServer.listen(PORT, () => {
-    logger(`Web panel running on port ${PORT}`);
-});
-
-(async () => {
-    await startDatabase();
+// Start initialization routines
+startDatabase().then(() => {
     startBot();
-})();
+    const PORT = process.env.PORT || 3000;
+    webServer.listen(PORT, () => {
+        logger(`Web panel UI server active on port ${PORT}`);
+    });
+});
