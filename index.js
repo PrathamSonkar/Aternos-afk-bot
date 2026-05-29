@@ -4,17 +4,17 @@ const { createClient } = require('redis');
 const http = require('http');
 const { renderPanel } = require('./panel');
 
-const OWNER_NAME = 'NinjaWarrior'; 
+const OWNER_NAME = 'NinjaWarrior'; // Your player name
 const botOptions = {
-    host: 'carp.aternos.host', 
-    port: 24606,               
-    username: 'CommanderBot',
+    host: 'SurvivalSeries125.aternos.me', // Your permanent server IP
+    port: 24606,                          // Your explicit port number
+    username: 'CommanderBot',             // The bot's name
     version: '1.21.1'
 };
 
 let bot = null, afkInterval = null, holdInterval = null, autoEatInterval = null; 
 let db = null, panelLogs = [], spawnTime = null, reconnectTimeout = null, isConnecting = false;
-let autoSleepMode = false; // Persistent toggle variable for auto sleep state tracking
+let autoSleepMode = false; 
 
 const EDIBLE_FOODS = ['cooked_beef', 'cooked_chicken', 'cooked_porkchop', 'cooked_mutton', 'cooked_cod', 'cooked_salmon', 'bread', 'baked_potato', 'golden_carrot', 'apple', 'carrot', 'melon_slice', 'sweet_berries'];
 
@@ -93,7 +93,6 @@ function startBot() {
         bot.pathfinder.setMovements(new Movements(bot));
         autoEatInterval = setInterval(checkAndEat, 5000);
         
-        // If auto-sleep mode was active before a disconnect, go straight back to bed on spawn
         if (autoSleepMode) {
             setTimeout(executeSleepRoutine, 3000);
         }
@@ -178,7 +177,7 @@ async function handleBotCommands(message) {
             break;
         case 'afk':
             if (afkInterval) return;
-            autoSleepMode = false; // Turn off sleep if shifting to AFK
+            autoSleepMode = false; 
             afkInterval = setInterval(() => {
                 bot.setControlState('jump', true);
                 setTimeout(() => bot.setControlState('jump', false), 500);
@@ -187,12 +186,12 @@ async function handleBotCommands(message) {
             break;
         case 'sleep':
             autoSleepMode = true; 
-            logger("🛌 Auto-Sleep Mode enabled.");
+            logger("A-Sleep Mode enabled.");
             executeSleepRoutine();
             break;
         case 'stop':
-            autoSleepMode = false; // Completely disables auto-sleep state loop tracking
-            logger("🛑 Auto-Sleep Mode disabled.");
+            autoSleepMode = false; 
+            logger("Auto-Sleep Mode disabled.");
             if (afkInterval) { clearInterval(afkInterval); afkInterval = null; }
             if (holdInterval) { clearInterval(holdInterval); holdInterval = null; bot.deactivateItem(); }
             if (bot.isSleeping) { try { await bot.wake(); bot.chat("Woke up!"); } catch(e){} }
@@ -236,4 +235,3 @@ startDatabase().then(() => {
         logger(`Server running on port ${PORT}`);
     });
 });
-    
