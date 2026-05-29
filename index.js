@@ -9,7 +9,7 @@ const botOptions = {
     host: 'SurvivalSeries125.aternos.me', 
     port: 24606, 
     username: 'CommanderBot',
-    version: '1.21.1' // Mineflayer requires standard notation format
+    version: '1.21.1'
 };
 
 let bot = null;
@@ -148,7 +148,7 @@ function stopBot() {
 
 async function handleBotCommands(message) {
     const args = message.split(' ');
-    const command = args[0]; 
+    const command = args[0]; // Fixed: Changed from 'args' back to 'args[0]' so text matching functions correctly
     if (!bot && ['stop', 'status'].includes(command) === false) return;
 
     switch (command) {
@@ -215,7 +215,9 @@ async function handleBotCommands(message) {
             if (bot) bot.chat(`HP: ${Math.round(bot.health)} | Food: ${bot.food}`);
             break;
         case 'drop':
-            for (const item of bot.inventory.items()) { try { await bot.dropItem(item); } catch (e) {} }
+            for (const item of bot.inventory.items()) { 
+                try { await bot.dropItem(item); } catch (e) {} 
+            }
             break;
     }
 }
@@ -250,7 +252,7 @@ const webServer = http.createServer(async (req, res) => {
 startDatabase().then(() => {
     startBot();
     const PORT = process.env.PORT || 3000;
-    // Binding explicitly to '0.0.0.0' enables web connectivity inside Railway routing proxies
+    // Explicitly binding to host IP '0.0.0.0' allows Railway's domain traffic routing to succeed
     webServer.listen(PORT, '0.0.0.0', () => {
         logger(`Web panel UI server active on port ${PORT}`);
     });
