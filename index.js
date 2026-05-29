@@ -6,8 +6,8 @@ const { renderPanel } = require('./panel');
 
 const OWNER_NAME = 'NinjaWarrior'; 
 const botOptions = {
-    host: 'carp.aternos.host', // Updated to your dynamic Aternos host
-    port: 24606,               // Updated to your dynamic port number
+    host: 'carp.aternos.host', 
+    port: 24606,               
     username: 'CommanderBot',
     version: '1.21.1'
 };
@@ -20,6 +20,7 @@ let db = null;
 let panelLogs = []; 
 let spawnTime = null; 
 let reconnectTimeout = null; 
+let isConnecting = false; // NEW: Prevents overlapping clone processes
 
 const EDIBLE_FOODS = [
     'cooked_beef', 'cooked_chicken', 'cooked_porkchop', 'cooked_mutton', 'cooked_cod', 'cooked_salmon', 
@@ -64,7 +65,7 @@ async function startDatabase() {
 
 function triggerReconnect() {
     if (reconnectTimeout) return; 
-    logger('🔄 Scheduling reconnect in 15 seconds...');
+    logger('🔄 Waiting 15 seconds to safely retry...');
     reconnectTimeout = setTimeout(() => {
         reconnectTimeout = null;
         startBot();
@@ -72,18 +73,30 @@ function triggerReconnect() {
 }
 
 function startBot() {
-    if (bot) return logger('Bot is already running.');
-    logger('Starting Minecraft Bot...');
+    if (bot || isConnecting) {
+        return logger('⚠️ Bot startup blocked: Connection routine already running.');
+    }
     
+    logger('🚀 Initializing connection parameters...');
+    isConnecting = true; // Block duplicate bots from spinning up
+
     if (autoEatInterval) clearInterval(autoEatInterval);
     if (afkInterval) clearInterval(afkInterval);
     if (holdInterval) clearInterval(holdInterval);
 
-    bot = mineflayer.createBot(botOptions);
-    bot.loadPlugin(pathfinder);
+    try {
+        bot = mineflayer.createBot(botOptions);
+        bot.loadPlugin(pathfinder);
+    } catch (err) {
+        logger(`❌ Critical creation error: ${err.message}`);
+        isConnecting = false;
+        triggerReconnect();
+        return;
+    }
 
     bot.once('spawn', () => {
-        logger(`Bot joined! Listening for: ${OWNER_NAME}`);
+        logger(`✅ Bot successfully joined! Listening for: ${OWNER_NAME}`);
+        isConnecting = false; // Reset block on successful connection
         spawnTime = Date.now(); 
         const defaultMovements = new Movements(bot);
         bot.pathfinder.setMovements(defaultMovements);
@@ -111,27 +124,28 @@ function startBot() {
     });
 
     bot.on('kick', (reason) => { 
-        logger(`Kicked: ${reason}`); 
+        logger(`❌ Kicked from server: ${reason}`); 
         stopBot(); 
         triggerReconnect(); 
     });
     
     bot.on('error', (err) => { 
-        logger(`Error: ${err.message}`); 
+        logger(`❌ Connection error: ${err.message}`); 
         stopBot(); 
         triggerReconnect(); 
     });
     
     bot.on('end', () => { 
-        logger('Disconnected from server.'); 
+        logger('🔌 Disconnected from server pipeline.'); 
         stopBot(); 
         triggerReconnect(); 
     });
 }
 
 function stopBot() {
-    logger('Stopping bot...');
+    logger('🧹 Clearing old bot instances...');
     spawnTime = null; 
+    isConnecting = false; // Clear lock during shutdown
     if (afkInterval) { clearInterval(afkInterval); afkInterval = null; }
     if (holdInterval) { clearInterval(holdInterval); holdInterval = null; }
     if (autoEatInterval) { clearInterval(autoEatInterval); autoEatInterval = null; }
@@ -222,7 +236,6 @@ async function handleBotCommands(message) {
     }
 }
 
-// Re-structured and fully restored web panel loop structure below
 const webServer = http.createServer(async (req, res) => {
     try {
         const urlObj = new URL(req.url, `http://${req.headers.host}`);
@@ -253,8 +266,5 @@ const webServer = http.createServer(async (req, res) => {
 startDatabase().then(() => {
     startBot();
     const PORT = process.env.PORT || 3000;
-    // Binding explicitly to '0.0.0.0' allows Railway's web traffic proxies to route to this app
     webServer.listen(PORT, '0.0.0.0', () => {
-        logger(`Web panel UI server active on port ${PORT}`);
-    });
-});
+        
