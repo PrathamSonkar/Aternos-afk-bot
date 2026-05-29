@@ -251,8 +251,8 @@ const webServer = http.createServer(async (req, res) => {
 
 startDatabase().then(() => {
     startBot();
+    // Force the server to listen to port 3000 to match Railway's proxy configuration
     const PORT = process.env.PORT || 3000;
-    // Explicitly binding to host IP '0.0.0.0' allows Railway's domain traffic routing to succeed
     webServer.listen(PORT, '0.0.0.0', () => {
         logger(`Web panel UI server active on port ${PORT}`);
     });
