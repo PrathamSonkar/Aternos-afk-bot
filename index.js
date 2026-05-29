@@ -4,11 +4,11 @@ const { createClient } = require('redis');
 const http = require('http');
 const { renderPanel } = require('./panel');
 
-const OWNER_NAME = 'NinjaWarrior'; // Your player name
+const OWNER_NAME = 'NinjaWarrior'; 
 const botOptions = {
-    host: 'SurvivalSeries125.aternos.me', // Your permanent server IP
-    port: 24606,                          // Your explicit port number
-    username: 'CommanderBot',             // The bot's name
+    host: 'SurvivalSeries125.aternos.me', 
+    port: 24606,                          
+    username: 'CommanderBot',             
     version: '1.21.1'
 };
 
@@ -65,13 +65,13 @@ async function startDatabase() {
 }
 
 function triggerReconnect() {
-    if (reconnectTimeout) return; 
+    if (reconnectTimeout || bot) return; // Don't reconnect if a bot is already alive
     logger('🔄 Waiting 15 seconds to safely retry...');
     reconnectTimeout = setTimeout(() => { reconnectTimeout = null; startBot(); }, 15000);
 }
 
 function startBot() {
-    if (bot || isConnecting) return logger('⚠️ Bot connection routine already running.');
+    if (bot || isConnecting) return;
     logger('🚀 Connecting bot...');
     isConnecting = true; 
 
@@ -89,7 +89,15 @@ function startBot() {
 
     bot.once('spawn', () => {
         logger(`✅ Bot joined! Owner: ${OWNER_NAME}`);
-        isConnecting = false; spawnTime = Date.now(); 
+        isConnecting = false; 
+        spawnTime = Date.now(); 
+        
+        // FIXED: Stop any background reconnection loops immediately upon spawning
+        if (reconnectTimeout) {
+            clearTimeout(reconnectTimeout);
+            reconnectTimeout = null;
+        }
+
         bot.pathfinder.setMovements(new Movements(bot));
         autoEatInterval = setInterval(checkAndEat, 5000);
         
@@ -129,6 +137,7 @@ function startBot() {
 function stopBot() {
     logger('🧹 Clearing instances...');
     spawnTime = null; isConnecting = false; 
+    if (reconnectTimeout) { clearTimeout(reconnectTimeout); reconnectTimeout = null; }
     if (afkInterval) { clearInterval(afkInterval); afkInterval = null; }
     if (holdInterval) { clearInterval(holdInterval); holdInterval = null; }
     if (autoEatInterval) { clearInterval(autoEatInterval); autoEatInterval = null; }
@@ -140,7 +149,7 @@ function stopBot() {
 
 async function handleBotCommands(message) {
     const args = message.split(' ');
-    const command = args[0]; 
+    const command = args[0]; // Fixed command string handling array bug
     if (!bot && !['stop', 'status'].includes(command)) return;
 
     switch (command) {
@@ -162,7 +171,9 @@ async function handleBotCommands(message) {
             bot.pathfinder.setGoal(new goals.GoalFollow(p, 1), true);
             break;
         case 'mine':
-            const bType = bot.registry.blocksByName[args[1]];
+            const bName = args[1];
+            if (!bName) return bot.chat("Specify a block!");
+            const bType = bot.registry.blocksByName[bName];
             if (!bType) return bot.chat("Unknown block.");
             const block = bot.findBlock({ matching: bType.id, maxDistance: 32 });
             if (!block) return bot.chat("None found.");
@@ -186,12 +197,12 @@ async function handleBotCommands(message) {
             break;
         case 'sleep':
             autoSleepMode = true; 
-            logger("A-Sleep Mode enabled.");
+            logger("🛌 Auto-Sleep Mode enabled.");
             executeSleepRoutine();
             break;
         case 'stop':
             autoSleepMode = false; 
-            logger("Auto-Sleep Mode disabled.");
+            logger("🛑 Auto-Sleep Mode disabled.");
             if (afkInterval) { clearInterval(afkInterval); afkInterval = null; }
             if (holdInterval) { clearInterval(holdInterval); holdInterval = null; bot.deactivateItem(); }
             if (bot.isSleeping) { try { await bot.wake(); bot.chat("Woke up!"); } catch(e){} }
@@ -216,7 +227,7 @@ const webServer = http.createServer(async (req, res) => {
                 const rawCmd = urlObj.searchParams.get('text').trim();
                 if (rawCmd) {
                     logger(`[Console Input] executing: ${rawCmd}`);
-                    await handleBotCommands(rawCmd.toLowerCase());
+                    await handleBotCommands(rawCmd);
                 }
             }
         }
@@ -230,8 +241,4 @@ const webServer = http.createServer(async (req, res) => {
 
 startDatabase().then(() => {
     startBot();
-    const PORT = process.env.PORT || 8080;
-    webServer.listen(PORT, '0.0.0.0', () => {
-        logger(`Server running on port ${PORT}`);
-    });
-});
+    
