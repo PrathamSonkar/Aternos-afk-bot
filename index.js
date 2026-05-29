@@ -13,7 +13,8 @@ const botOptions = {
 };
 
 let bot = null, afkInterval = null, holdInterval = null, autoEatInterval = null; 
-let db = null, panelLogs = [], spawnTime = null, reconnectTimeout = null, isConnecting = false; 
+let db = null, panelLogs = [], spawnTime = null, reconnectTimeout = null, isConnecting = false;
+let autoSleepMode = false; // Persistent toggle variable for auto sleep state tracking
 
 const EDIBLE_FOODS = ['cooked_beef', 'cooked_chicken', 'cooked_porkchop', 'cooked_mutton', 'cooked_cod', 'cooked_salmon', 'bread', 'baked_potato', 'golden_carrot', 'apple', 'carrot', 'melon_slice', 'sweet_berries'];
 
@@ -26,7 +27,7 @@ function logger(msg) {
 }
 
 async function checkAndEat() {
-    if (!bot || !bot.inventory || bot.food >= 15) return;
+    if (!bot || !bot.inventory || bot.food >= 15 || bot.isSleeping) return;
     const foodItem = bot.inventory.items().find(item => EDIBLE_FOODS.includes(item.name));
     if (!foodItem) return; 
     logger(`🍖 Eating ${foodItem.name}...`);
@@ -34,6 +35,23 @@ async function checkAndEat() {
         await bot.equip(foodItem, 'hand');
         await bot.consume();
     } catch (err) { logger(`❌ Eat failed: ${err.message}`); }
+}
+
+async function executeSleepRoutine() {
+    if (!bot || bot.isSleeping || !autoSleepMode) return;
+    const bedBlock = bot.findBlock({ matching: (b) => b.name.includes('bed'), maxDistance: 32 });
+    if (!bedBlock) {
+        logger("⚠️ Auto-Sleep Warning: No beds found in a 32-block radius.");
+        return;
+    }
+    try {
+        logger("🛏️ Moving to bed to fulfill auto-sleep command...");
+        await bot.pathfinder.goto(new goals.GoalLookAtBlock(bedBlock.position, bot.world));
+        await bot.sleep(bedBlock);
+        logger("💤 Bot is now sleeping successfully.");
+    } catch (err) {
+        logger(`❌ Sleep execution stalled: ${err.message}`);
+    }
 }
 
 async function startDatabase() {
@@ -74,12 +92,30 @@ function startBot() {
         isConnecting = false; spawnTime = Date.now(); 
         bot.pathfinder.setMovements(new Movements(bot));
         autoEatInterval = setInterval(checkAndEat, 5000);
+        
+        // If auto-sleep mode was active before a disconnect, go straight back to bed on spawn
+        if (autoSleepMode) {
+            setTimeout(executeSleepRoutine, 3000);
+        }
+    });
+
+    bot.on('wake', () => {
+        logger("⏰ Bot woke up or was forced out of bed.");
+        if (autoSleepMode) {
+            logger("🔄 Auto-Sleep Mode is ON. Returning to bed in 5 seconds...");
+            setTimeout(executeSleepRoutine, 5000);
+        }
     });
 
     bot.on('death', () => {
         logger('⚠️ Bot died! Respawning...');
         if (holdInterval) { clearInterval(holdInterval); holdInterval = null; }
-        setTimeout(() => { if (bot && !bot.isAlive) bot.respawn(); }, 1000);
+        setTimeout(() => { 
+            if (bot && !bot.isAlive) {
+                bot.respawn();
+                if (autoSleepMode) setTimeout(executeSleepRoutine, 4000);
+            }
+        }, 1000);
     });
 
     bot.on('chat', (username, message) => {
@@ -142,19 +178,28 @@ async function handleBotCommands(message) {
             break;
         case 'afk':
             if (afkInterval) return;
+            autoSleepMode = false; // Turn off sleep if shifting to AFK
             afkInterval = setInterval(() => {
                 bot.setControlState('jump', true);
                 setTimeout(() => bot.setControlState('jump', false), 500);
                 bot.look(bot.entity.yaw + 1.5, 0);
             }, 2000);
             break;
+        case 'sleep':
+            autoSleepMode = true; 
+            logger("🛌 Auto-Sleep Mode enabled.");
+            executeSleepRoutine();
+            break;
         case 'stop':
+            autoSleepMode = false; // Completely disables auto-sleep state loop tracking
+            logger("🛑 Auto-Sleep Mode disabled.");
             if (afkInterval) { clearInterval(afkInterval); afkInterval = null; }
             if (holdInterval) { clearInterval(holdInterval); holdInterval = null; bot.deactivateItem(); }
+            if (bot.isSleeping) { try { await bot.wake(); bot.chat("Woke up!"); } catch(e){} }
             bot.pathfinder.setGoal(null); bot.clearControlStates();
             break;
         case 'status':
-            bot.chat(`HP: ${Math.round(bot.health)} | Food: ${bot.food}`);
+            bot.chat(`HP: ${Math.round(bot.health)} | Food: ${bot.food} | AutoSleep: ${autoSleepMode}`);
             break;
     }
 }
@@ -170,10 +215,13 @@ const webServer = http.createServer(async (req, res) => {
             if (action === 'clear_stop') await handleBotCommands('stop');
             if (action === 'console' && urlObj.searchParams.has('text')) {
                 const rawCmd = urlObj.searchParams.get('text').trim();
-                if (rawCmd && bot) bot.chat(rawCmd);
+                if (rawCmd) {
+                    logger(`[Console Input] executing: ${rawCmd}`);
+                    await handleBotCommands(rawCmd.toLowerCase());
+                }
             }
         }
-        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); 
         res.end(renderPanel({ bot, panelLogs, spawnTime }));
     } catch (e) {
         res.writeHead(500, { 'Content-Type': 'text/plain' });
@@ -183,7 +231,9 @@ const webServer = http.createServer(async (req, res) => {
 
 startDatabase().then(() => {
     startBot();
-    webServer.listen(process.env.PORT || 3000, '0.0.0.0', () => {
-        logger(`Server running on port ${process.env.PORT || 3000}`);
+    const PORT = process.env.PORT || 8080;
+    webServer.listen(PORT, '0.0.0.0', () => {
+        logger(`Server running on port ${PORT}`);
     });
 });
+    
